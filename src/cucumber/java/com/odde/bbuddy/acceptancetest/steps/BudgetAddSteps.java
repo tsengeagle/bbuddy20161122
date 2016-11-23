@@ -1,25 +1,64 @@
 package com.odde.bbuddy.acceptancetest.steps;
 
+import com.odde.bbuddy.acceptancetest.data.budget.BudgetRepositoryForTest;
 import com.odde.bbuddy.acceptancetest.driver.UiDriver;
-import cucumber.api.PendingException;
+import com.odde.bbuddy.budget.domain.Budget;
+import cucumber.api.java.en.Given;
 import cucumber.api.java.en.Then;
 import cucumber.api.java.en.When;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.propertyeditors.StringArrayPropertyEditor;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 /**
- * Created by user on 2016/11/22.
+ * Created by zbcjackson on 22/11/2016.
  */
 public class BudgetAddSteps {
-    @When("^add (\\d+) at \"([^\"]*)\"$")
-    public void add_at(int arg1, String arg2) throws Throwable {
-        // Write code here that turns the phrase above into concrete actions
-        throw new PendingException();
+    @Autowired
+    UiDriver driver;
+
+    @Autowired
+    BudgetRepositoryForTest budgetRepository;
+
+    @When("^Add budget (\\d+) for \"([^\"]*)\"$")
+    public void add_budget_for(int amount, String month) throws Throwable {
+        driver.navigateTo("/budgets/add");
+        driver.findElementByName("amount").sendKeys(String.valueOf(amount));
+        driver.findElementByName("month").sendKeys(month);
+        driver.findElementByName("amount").submit();
     }
 
-    @Then("^DB has one record with \"([^\"]*)\" (\\d+)$")
-    public void db_has_one_record_with(String arg1, int arg2) throws Throwable {
-        // Write code here that turns the phrase above into concrete actions
-        throw new PendingException();
+    @Then("^exists budget (\\d+) for \"([^\"]*)\"$")
+    public void exists_budget_for(int arg1, String month) throws Throwable {
+        Budget budget = budgetRepository.findByMonth(month);
+        assertNotNull(budget);
+        assertEquals(arg1, budget.getAmount());
+        assertEquals(month, budget.getMonth());
     }
+
+    @Given("^budget (\\d+) for \"([^\"]*)\" already exist$")
+    public void budget_for_already_exist(int amount, String month) throws Throwable {
+        Budget budgetOld = new Budget();
+        budgetOld.setAmount(amount);
+        budgetOld.setMonth(month);
+
+        budgetRepository.save(budgetOld);
+
+    }
+
+    @Then("^not exists budget (\\d+) for \"([^\"]*)\"$")
+    public void not_exists_budget_for(int amount, String month) throws Throwable {
+
+        Budget budget = budgetRepository.findByMonth(month);
+        assertNull(budget);
+    }
+
+    @Then("^display error msg \"([^\"]*)\"$")
+    public void display_error_msg(String errorMsg) throws Throwable {
+        String actualMsg = driver.findElementByName("errMsg").getText();
+        assertEquals(errorMsg, actualMsg);
+    }
+
 }
