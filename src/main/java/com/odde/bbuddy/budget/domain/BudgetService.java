@@ -24,42 +24,39 @@ public class BudgetService {
 
     public void add(Budget budget,
                     Runnable failure) {
-        if (!validateBudget(budget.getMonth())) {
+        if (!validateBudget(budget)) {
             failure.run();
             return;
         }
 
-        // 1. no records in table.
-        if (repository.count() ==0){
-            repository.save(budget);
-            return;
-        }
-
-        // 2. update specific record
         Budget savedBudget = repository.findByMonth(budget.getMonth());
         if (savedBudget != null) {
             savedBudget.setAmount(budget.getAmount());
-
             repository.save(savedBudget);
-            return;
-        }
-
-        // 2. query previous month budget and next month budget
-        String[] intentMonth = budget.getMonth().split("-");
-        String preMonth = String.format("%s-%02d", intentMonth[0] ,Integer.parseInt(intentMonth[1])-1 );
-        Budget previousMonth = repository.findByMonth(preMonth);
-
-        String nextMonth = String.format("%s-%02d", intentMonth[0] ,Integer.parseInt(intentMonth[1])+1 );
-        Budget nextMonthBudget = repository.findByMonth(nextMonth);
-
-        boolean isvalid = (previousMonth!= null || nextMonthBudget != null);
-
-        if(isvalid){
+        }else {
             repository.save(budget);
         }
-
-
     }
+
+    private boolean hasPreviousOrCurrentOrNextBudget(Budget budget) {
+        return getBudgetByMonthOffset(budget, 0) != null || getPreviousBudget(budget) != null || getNextBudget(budget) != null;
+    }
+
+    private Budget getNextBudget(Budget budget) {
+        return getBudgetByMonthOffset(budget, 1);
+    }
+
+    private Budget getPreviousBudget(Budget budget) {
+        return getBudgetByMonthOffset(budget, -1);
+    }
+
+
+    private Budget getBudgetByMonthOffset(Budget budget, int offset){
+        String[] intentMonth = budget.getMonth().split("-");
+        int monthNumber = Integer.parseInt(intentMonth[1]) + offset;
+        return repository.findByMonth(String.format("%s-%02d", intentMonth[0] , monthNumber));
+    }
+
 
     public List<Budget> list() {
 
@@ -70,53 +67,58 @@ public class BudgetService {
                          .collect(Collectors.toList());
     }
 
-    public boolean validateBudget(String targetMonth) {
-        Budget previousBudget = repository.findByMonthLessThan(targetMonth);
-        if (previousBudget == null)
-            return true;
-        else {
-            String existedMonth = previousBudget.getMonth();
-            String[] dateArr = existedMonth.split("-");
-            int month = Integer.valueOf(dateArr[1]) + 1;
-
-            String expectMonth = String.format("%s-%02d", dateArr[0], month);
-            return expectMonth.equals(targetMonth);
-        }
+    public boolean validateBudget(Budget budget) {
+        return repository.count() == 0 || hasPreviousOrCurrentOrNextBudget(budget);
     }
 
     public double totalBudget(String from,
                               String to) {
 
+        final LocalDate toDate = LocalDate.parse(to);
+        final LocalDate fromDate = LocalDate.parse(from);
+
         List<Budget> budgets = repository.findBetween(from.substring(0, 7), to.substring(0, 7));
+
         return budgets.stream()
-                      .mapToDouble(budget -> {
-
-                          LocalDate bugetMonth = LocalDate.parse(budget.getMonth() + "-01");
-                          LocalDate toDate = LocalDate.parse(to);
-                          LocalDate fromDate = LocalDate.parse(from);
-                          int days = fromDate.getMonth()
-                                             .length(true);
-
-                          int duration = 0;
-                          if (bugetMonth.isBefore(toDate)) {
-
-                              duration = toDate.getDayOfMonth() - fromDate.getDayOfMonth() + 1;
-
-                          }
-                          else {
-
-                              //TODO  more than two month
-
-                          }
-
-                          System.out.println(days + " " + duration);
-                          return new BigDecimal(budget.getAmount()).divide(new BigDecimal(days),
-                                                                           BigDecimal.ROUND_HALF_UP)
-                                                                   .multiply(new BigDecimal(duration))
-                                                                   .doubleValue();
-
-                      })
+                      .mapToDouble(budget -> monthlyBudget(budget, fromDate, toDate))
                       .sum();
+
+    }
+
+    private double monthlyBudget(Budget budget,
+                                 LocalDate fromDate,
+                                 LocalDate toDate) {
+
+        LocalDate budgetMonth = budget.thisMonth();
+
+        int days = budgetMonth.getMonth()
+                              .length(true);
+
+        int duration;
+        if (fromDate.getMonth()
+                    .equals(toDate.getMonth())) {
+
+            duration = toDate.getDayOfMonth() - fromDate.getDayOfMonth() + 1;
+        }
+        else if (budgetMonth.getMonth()
+                            .equals(fromDate.getMonth())) {
+
+            duration = days - fromDate.getDayOfMonth() + 1;
+
+        }
+        else if (budgetMonth.getMonth()
+                            .equals(toDate.getMonth())) {
+
+            duration = toDate.getDayOfMonth();
+        }
+
+        else {
+            duration = days;
+        }
+
+        return new BigDecimal(budget.getAmount()).divide(new BigDecimal(days), BigDecimal.ROUND_HALF_UP)
+                                                 .multiply(new BigDecimal(duration))
+                                                 .doubleValue();
 
     }
 }
