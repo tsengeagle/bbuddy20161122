@@ -14,6 +14,3 @@ Feature: List budget
       | 1000 | 2016-08 |
       | 1600 | 2016-09 |
 
-  Scenario: No budget in database
-    When search
-    Then show "No budget"

@@ -71,14 +71,15 @@ public class BudgetService {
         return repository.count() == 0 || hasPreviousOrCurrentOrNextBudget(budget);
     }
 
-    public double totalBudget(String from,
-                              String to) {
+    public double totalBudget(String startDate,
+                              String endDate) {
 
-        final LocalDate toDate = LocalDate.parse(to);
-        final LocalDate fromDate = LocalDate.parse(from);
+        String startMonth=startDate.substring(0,7);
+        String endMonth=endDate.substring(0,7);
+        List<Budget> budgets = repository.findBetween(startMonth, endMonth);
 
-        List<Budget> budgets = repository.findBetween(from.substring(0, 7), to.substring(0, 7));
-
+        final LocalDate toDate = LocalDate.parse(endDate);
+        final LocalDate fromDate = LocalDate.parse(startDate);
         return budgets.stream()
                       .mapToDouble(budget -> monthlyBudget(budget, fromDate, toDate))
                       .sum();
@@ -91,34 +92,36 @@ public class BudgetService {
 
         LocalDate budgetMonth = budget.thisMonth();
 
-        int days = budgetMonth.getMonth()
-                              .length(true);
+        int budgetLeftDays = getDuration(fromDate, toDate, budgetMonth);
 
+        int days = budgetMonth.getMonth().length(true);
+        return new BigDecimal(budget.getAmount()).divide(new BigDecimal(days), BigDecimal.ROUND_HALF_UP)
+                                                 .multiply(new BigDecimal(budgetLeftDays))
+                                                 .doubleValue();
+
+    }
+
+    private int getDuration(LocalDate fromDate, LocalDate toDate, LocalDate budgetMonth) {
         int duration;
         if (fromDate.getMonth()
                     .equals(toDate.getMonth())) {
-
+            //計算同月的日期間隔
             duration = toDate.getDayOfMonth() - fromDate.getDayOfMonth() + 1;
         }
         else if (budgetMonth.getMonth()
                             .equals(fromDate.getMonth())) {
-
-            duration = days - fromDate.getDayOfMonth() + 1;
-
+            //計算在該預算月份還有幾天
+            duration = budgetMonth.getMonth().length(true) - fromDate.getDayOfMonth() + 1;
         }
         else if (budgetMonth.getMonth()
                             .equals(toDate.getMonth())) {
 
+            //在最後一個月份直接看結束日期的"日"
             duration = toDate.getDayOfMonth();
         }
-
         else {
-            duration = days;
+            duration = budgetMonth.getMonth().length(true);
         }
-
-        return new BigDecimal(budget.getAmount()).divide(new BigDecimal(days), BigDecimal.ROUND_HALF_UP)
-                                                 .multiply(new BigDecimal(duration))
-                                                 .doubleValue();
-
+        return duration;
     }
 }
